@@ -59,33 +59,22 @@ def load_timeseries(
 
     if not filepath.exists():
         print(f"⚠️ File not found: {filepath}")
-        return None
+        return None, None, None
 
-    try:
-        ds = xr.open_dataset(filepath)
-    except Exception as exc:
-        print(f"⚠️ Failed to open dataset {filepath}: {exc}")
-        return None
+    ds = xr.open_dataset(filepath)
 
-    # Convert time axis to pandas datetime (handles cftime automatically)
-    try:
-        time = xr.conventions.decode_cf(ds).time.to_pandas()
-    except Exception:
-        time = xr.DataArray(ds.time).to_pandas()
+    # Convert cftime to Python datetime
+    time = [dt.datetime(t.year, t.month, t.day) for t in ds.time.values]
 
-    mask = (time >= start) & (time <= end)
+    # Crop to date range
+    mask = [(start <= t <= end) for t in time]
+    time_cropped = [t for t, keep in zip(time, mask) if keep]
+    values_cropped = ds[var_name].values[mask]
 
-    if mask.sum() == 0:
-        print(f"⚠️ No data in range for {filepath}")
-        return None
+    # Find index of first timestamp in year 2005 (in cropped array)
+    index_2005 = next((i for i, t in enumerate(time_cropped) if t.year == 2005), None)
 
-    values = ds[var_name].sel(time=mask).values
-    time = time[mask].to_numpy()
-
-    # Determine cutoff index
-    index_cutoff = np.argmax(time.astype("datetime64[Y]").astype(int) + 1970 >= cutoff_year)
-
-    return time, values, index_cutoff
+    return time_cropped, values_cropped, index_2005
 
 
 # ----------------------------------------------------------------------------- #

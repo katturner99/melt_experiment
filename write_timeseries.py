@@ -1,3 +1,4 @@
+import os
 import sys
 import logging
 from pathlib import Path
@@ -143,6 +144,9 @@ def main():
 
     # Combine and save
     final_ds = xr.concat([old_ds, out_dataset], dim="time") if old_ds else out_dataset
+    if output_file.exists():
+        os.remove(output_file)
+    
     final_ds.to_netcdf(output_file)
     logging.info(f"Saved updated timeseries to {output_file}")
 
