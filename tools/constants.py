@@ -7,4 +7,8 @@ regions = {
     "getz":  ([-75, -73], [224, 245.2]),
 }
 
+ATM_PRESS = 101325      # Atmospheric pressure in Pascals
+RHO_REF = 1025   # Density of seawater in kg/m³
+G = 9.81 
+
 depth_range = (-200,-700)
