@@ -8,6 +8,7 @@ from tools.funcs import (
     get_available_months,
     create_timeseries_3d,
     create_timeseries_2d,
+    create_timeseries_vel,
     create_melt,
 )
 from tools.directories_and_paths import OUTPUT_PATH, get_filepath
@@ -38,6 +39,7 @@ def create_and_save_timeseries(
         "salt": create_timeseries_3d,
         "melt": create_melt,
         "etan": create_timeseries_2d,
+        "undercurrent": create_timeseries_vel,
     }
 
     attr_map = {
@@ -63,7 +65,13 @@ def create_and_save_timeseries(
             standard_name="sea_surface_height",
             long_name="Mean sea surface height over the area.",
             units="m",
-            name="etan_{region}",
+            name="etan",
+        ),
+        "undercurrent": dict(
+            standard_name="sea_water_speed",
+            long_name="Max along slope speed for the undercurrent areas",
+            units="m s-1",
+            name="speed",
         ),
     }
 
@@ -93,7 +101,7 @@ def parse_args():
     parser.add_argument("scenario", help="Scenario (LENS, month, 1year, 5year)")
     parser.add_argument("ens_member", help="Ensemble member (1–9)")
     parser.add_argument(
-        "variable", choices=["temperature", "salt", "etan", "melt"], help="Variable to process"
+        "variable", choices=["temperature", "salt", "etan", "melt", "undercurrent"], help="Variable to process"
     )
     return parser.parse_args()
 
