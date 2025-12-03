@@ -3,9 +3,11 @@ import sys
 import logging
 from pathlib import Path
 import xarray as xr
-import argparse
 from tools.funcs import (
     get_available_months,
+    parse_args,
+)
+from tools.timeseries_funcs import (
     create_timeseries_3d,
     create_timeseries_2d,
     create_timeseries_vel,
@@ -15,24 +17,34 @@ from tools.directories_and_paths import OUTPUT_PATH, get_filepath
 from tools.constants import regions
 
 
-def setup_logging(log_file):
-    """Configure logging to save messages to a file."""
-    logging.basicConfig(
-        filename=log_file,
-        filemode="a",   # append mode
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        level=logging.INFO
-    )
-
-
 def create_and_save_timeseries(
-    sorted_months,
+    sorted_years,
     filepath,
     region,
     out_dataset,
     variable,
 ):
-    """Generate and append timeseries data for a region and variable."""
+    """ 
+    Function that assigns the correct functions to generate and append 
+    timeseries data for a region and variable.
+
+    Parameters
+    ----------
+    sorted_years : list
+                   list containing the years to sort through.
+    filepath     : string
+                   filepath where we are reading the data from.
+    region       : dictionary 
+                   region to process (lat and lon and depth limits).
+    out_dataset  : xarray
+                   xarray containing out timeseries.
+    variable     : string
+                   variable to process.
+
+    Returns:
+    --------
+    out_dataset : xarray file containing the tiemseries.
+    """
 
     func_map = {
         "temperature": create_timeseries_3d,
@@ -80,7 +92,7 @@ def create_and_save_timeseries(
 
     func = func_map[variable]
     var = variable if variable != "etan" else "ETAN"
-    timeseries_data = func(sorted_months, filepath, var=var, region=region)
+    timeseries_data = func(sorted_years, filepath, var=var, region=region)
 
     attrs = attr_map[variable]
     timeseries_data.name = attrs["name"].format(region=region)
@@ -93,56 +105,56 @@ def create_and_save_timeseries(
     out_dataset[timeseries_data.name] = timeseries_data
     return out_dataset
 
-def parse_args():
-    """Parse command-line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Create time series for UaMITgcm coupled output."
-    )
-    parser.add_argument("scenario", help="Scenario (LENS, month, 1year, 5year)")
-    parser.add_argument("ens_member", help="Ensemble member (1–9)")
-    parser.add_argument(
-        "variable", choices=["temperature", "salt", "etan", "melt", "undercurrent"], help="Variable to process"
-    )
-    return parser.parse_args()
-
 
 def main():
+    """
+    Top level function to write a timeseries for a given scenario, 
+    ensemble member number, variable.
+
+    Parameters
+    ----------
+    scenario   : string
+                 experiment to calculate (e.g.LENS, MELT, MELT_noS).
+    ens_member : int
+                 ensemble member number (e.g. 2, 3, 4).
+    variable   : string
+                 variable to create timeseries about (e.g. temperature).
+
+    Returns:
+    --------
+    output_timeseries : netcdf file containing the timeseries.
+    """
+
+    # --- load data based on scenario, ensemble member number, variable ---
     args = parse_args()
-
     filepath = get_filepath(args.scenario, args.ens_member)
-    #filepath = Path(f"/data/oceans_output/shelf/kaight/archer2_mitgcm/{args.scenario}_LENS001_O")
-    output_file = Path(OUTPUT_PATH) / f"{args.scenario}00{args.ens_member}_{args.variable}_timeseries.nc"
-    log_file = Path(OUTPUT_PATH) / f"{args.scenario}00{args.ens_member}_{args.variable}_timeseries.log"
-    setup_logging(log_file)
+    output_filename = f"{args.scenario}00{args.ens_member}_{args.variable}_timeseries.nc"
+    output_file = Path(OUTPUT_PATH) / output_filename
 
-    logging.info(
-        f"Starting timeseries script for scenario={args.scenario}, "
-        f"ens_member={args.ens_member}, variable={args.variable}"
-    )
-
+    # --- look for previous months / months to add to the timeseries ---
     sorted_months = get_available_months(filepath)
     data_dir = filepath / "output"
     old_ds = None
 
-    # Handle existing dataset
+    # --- handle existing dataset ---
     if output_file.exists():
-        print(output_file)
         print("Previous timeseries exists, appending new months...")
         old_ds = xr.open_dataset(output_file)
         last_timestamp = str(old_ds.time.dt.strftime("%Y%m").values[-1])
         new_months = [m for m in sorted_months if m > last_timestamp]
 
         if not new_months:
-            logging.info("No new months to process. Timeseries is up-to-date.")
+            print("No new months to process. Timeseries is up-to-date.")
             sys.exit()
 
         sorted_months = new_months
-        logging.info(f"Appending {len(new_months)} new months after {last_timestamp}")
+        print(f"Appending {len(new_months)} new months after {last_timestamp}")
+    
+    # --- is nothing exists, create a new dataset ---
     else:
-        
-        logging.info("No previous timeseries exists, starting from scratch.")
+        print("No previous timeseries exists, starting from scratch.")
 
-    # Compute new data
+    # --- compute new timeseries ---
     out_dataset = xr.Dataset()
     regions_to_process = regions.keys() if args.variable in ["temperature", "salt", "melt"] else ["total"]
 
@@ -150,13 +162,13 @@ def main():
         logging.info(f"Processing region: {region}")
         out_dataset = create_and_save_timeseries(sorted_months, data_dir, region, out_dataset, args.variable)
 
-    # Combine and save
+    # --- combine and save ---
     final_ds = xr.concat([old_ds, out_dataset], dim="time") if old_ds else out_dataset
     if output_file.exists():
         os.remove(output_file)
     
     final_ds.to_netcdf(output_file)
-    logging.info(f"Saved updated timeseries to {output_file}")
+    print(f"Saved updated timeseries to {output_file}")
 
 
 if __name__ == "__main__":

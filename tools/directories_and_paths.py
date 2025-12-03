@@ -12,6 +12,8 @@ def get_filepath(scenario, ens_member):
     scenario_map = {
         "LENS": f"old_PAS/PAS_LENS00{ens_member}_O/",
         "MELT_noS": f"PAS_MELT00{ens_member}_noS/",
+        "MELT": f"PAS_MELT00{ens_member}_S/",
+        "MELT_old": f"PAS_MELT00{ens_member}_test/",
     }
     if scenario not in scenario_map:
         sys.exit(f"Invalid scenario: {scenario}")

@@ -18,6 +18,7 @@ SCENARIO_COLORS = {
     "LENS": "palevioletred",
     "MELT_noS": "cornflowerblue",
     "MELT": "seagreen",
+    "MELT_old": "orange",
 }
 
 LINE_STYLES = ['-.', '--', ':']
@@ -69,7 +70,10 @@ def load_timeseries(
     # Crop to date range
     mask = [(start <= t <= end) for t in time]
     time_cropped = [t for t, keep in zip(time, mask) if keep]
-    values_cropped = ds[var_name].values[mask]
+    if var_name == "speed":
+        values_cropped = -ds[var_name].values[mask]
+    else:
+        values_cropped =  ds[var_name].values[mask]
 
     # Find index of first timestamp in year 2005 (in cropped array)
     index_2005 = next((i for i, t in enumerate(time_cropped) if t.year == 2005), None)
@@ -118,8 +122,8 @@ def plot_comparison(
             time, values, idx_cut = ts
 
             # Smooth if enough data
-            smoothed = moving_average(values, window) if len(values) >= window else values
-
+            #smoothed = moving_average(values, window) if len(values) >= window else values
+            smoothed = values
             linestyle = LINE_STYLES[(member - 1) % len(LINE_STYLES)]
 
             # Pre-cutoff segment (gray)
@@ -146,7 +150,7 @@ def plot_comparison(
     ax.set(
         xlabel="Time",
         ylabel=var,
-        title=f"{region_var} Ensemble Comparison"
+        title=f"Potential Temperature (degC) Ensemble Comparison {region_var}"
     )
 
     ax.grid(True, linestyle="--", alpha=0.2)
@@ -172,10 +176,10 @@ def plot_comparison(
 # ----------------------------------------------------------------------------- #
 
 def main() -> None:
-    scenarios = ["LENS", "MELT_noS"]
+    scenarios = ["MELT", "MELT_noS"]
     ens_members = [2, 3, 4]
-    var = "temperature"
-    region_var = "theta_cont_shelf"
+    var = "salt"
+    region_var = "salt_cont_shelf"
 
     plot_comparison(
         scenarios=scenarios,
@@ -183,7 +187,7 @@ def main() -> None:
         var=var,
         region_var=region_var,
         start_year=1990,
-        end_year=2100,
+        end_year=2015,
     )
 
 

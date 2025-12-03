@@ -111,5 +111,6 @@ def compute_along_isobath_velocity(ds):
     V_c = V.interp(YG=ds.YC)
 
     V_along_slope = U_c * t_x + V_c * t_y
+    print(U_c, V_c, V_along_slope)
 
     return V_along_slope
