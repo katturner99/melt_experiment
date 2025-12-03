@@ -148,8 +148,8 @@ def main():
         labels=labels,
         vars_to_plot=vars_to_plot,
         time=time,
-        start=datetime.date(2080, 1, 1),
-        end=datetime.date(2100, 1, 1),
+        start=datetime.date(1970, 1, 1),
+        end=datetime.date(2030, 1, 1),
         window_years=5,
         mode=MODE,
     )
