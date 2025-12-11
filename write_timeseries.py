@@ -136,19 +136,20 @@ def main():
     data_dir = filepath / "output"
     old_ds = None
 
-    # --- handle existing dataset ---
+    # --- check for existing dataset ---
     if output_file.exists():
-        print("Previous timeseries exists, appending new months...")
+        print("Previous timeseries exists, appending new years...")
         old_ds = xr.open_dataset(output_file)
         last_timestamp = str(old_ds.time.dt.strftime("%Y%m").values[-1])
+        print(f"Last timestamp at {last_timestamp}")
         new_months = [m for m in sorted_months if m > last_timestamp]
 
         if not new_months:
-            print("No new months to process. Timeseries is up-to-date.")
+            print("No new years to process. Timeseries is up-to-date.")
             sys.exit()
 
         sorted_months = new_months
-        print(f"Appending {len(new_months)} new months after {last_timestamp}")
+        print(f"Appending {len(new_months)} new years after {last_timestamp}")
     
     # --- is nothing exists, create a new dataset ---
     else:
@@ -159,7 +160,6 @@ def main():
     regions_to_process = regions.keys() if args.variable in ["temperature", "salt", "melt"] else ["total"]
 
     for region in regions_to_process:
-        logging.info(f"Processing region: {region}")
         out_dataset = create_and_save_timeseries(sorted_months, data_dir, region, out_dataset, args.variable)
 
     # --- combine and save ---

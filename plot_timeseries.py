@@ -16,8 +16,8 @@ from tools.calcs import moving_average
 
 SCENARIO_COLORS = {
     "LENS": "palevioletred",
-    "MELT_noS": "cornflowerblue",
-    "MELT": "seagreen",
+    "MELT_noS": "deepskyblue",
+    "MELT": "darkorange",
     "MELT_old": "orange",
 }
 
@@ -122,8 +122,8 @@ def plot_comparison(
             time, values, idx_cut = ts
 
             # Smooth if enough data
-            #smoothed = moving_average(values, window) if len(values) >= window else values
-            smoothed = values
+            smoothed = moving_average(values, window) if len(values) >= window else values
+            #smoothed = values
             linestyle = LINE_STYLES[(member - 1) % len(LINE_STYLES)]
 
             # Pre-cutoff segment (gray)
@@ -146,11 +146,19 @@ def plot_comparison(
                 alpha=0.9,
             )
 
+    if var == "temperature":
+        title = f"Potential Temperature between 200 and 700m ($^\circ$C) ({region_var})"
+    elif var == "salt":
+        title = f"Salinity between 200 and 700m (psu) ({region_var}))"
+    elif var == "undercurrent":
+        title = "Undercurrent Speed"
+    else:
+        title = region_var
     # Labels / formatting
     ax.set(
         xlabel="Time",
         ylabel=var,
-        title=f"Potential Temperature (degC) Ensemble Comparison {region_var}"
+        title=title,
     )
 
     ax.grid(True, linestyle="--", alpha=0.2)
@@ -168,7 +176,7 @@ def plot_comparison(
     plt.savefig(output_file, dpi=300, bbox_inches="tight")
     print(f"✅ Saved figure: {output_file}")
 
-    plt.show()
+    #plt.show()
 
 
 # ----------------------------------------------------------------------------- #
@@ -176,10 +184,10 @@ def plot_comparison(
 # ----------------------------------------------------------------------------- #
 
 def main() -> None:
-    scenarios = ["MELT", "MELT_noS"]
-    ens_members = [2, 3, 4]
-    var = "salt"
-    region_var = "salt_cont_shelf"
+    scenarios = ["LENS", "MELT", "MELT_noS"]
+    ens_members = [3]
+    var = "temperature"
+    region_var = "theta_cont_shelf"
 
     plot_comparison(
         scenarios=scenarios,
@@ -187,7 +195,7 @@ def main() -> None:
         var=var,
         region_var=region_var,
         start_year=1990,
-        end_year=2015,
+        end_year=2100,
     )
 
 
