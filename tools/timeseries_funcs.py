@@ -100,10 +100,10 @@ def create_timeseries_3d(months, base_dir, var = "THETA", region = "cont_shelf",
     for m in months:
         ds = load_month_dataset(base_dir, m)
 
-        dV = ds["rA"] * ds["drF"]
+        dV = ds["rA"] * ds["drF"] * ds["hFacC"]
 
         field = ds[var]
-        
+
         field = field.where(ds.Depth < depth_limit).sel(Z=slice(*depth_range), YC=slice(*lat_rng), XC=slice(*lon_rng))
         dV = dV.where(ds.Depth < depth_limit).sel(Z=slice(*depth_range), YC=slice(*lat_rng), XC=slice(*lon_rng))
 
@@ -157,11 +157,12 @@ def create_melt(months, base_dir, var = "melt", region = "cont_shelf"):
     for m in months:
         ds = load_month_dataset(base_dir, m)
 
-        
-        sub = ds.sel(YC=slice(*lat_rng), XC=slice(*lon_rng))
-        mask = (sub.Depth < depth_limit)
-        melt_flux = (sub[var] * 3600 * 24 * 365).where(mask)
-        area = sub.rA.where(mask)
+        if region == "cont_shelf":
+            sub = ds
+        else:
+            sub = ds.sel(YC=slice(*lat_rng), XC=slice(*lon_rng))
+        melt_flux = (sub[var] * 3600 * 24 * 365)
+        area = sub.rA
 
         melt_total = 1e-12 * ((-melt_flux) * area).sum(dim=("YC", "XC"))
         ts.append(melt_total)
