@@ -3,7 +3,7 @@ import numpy as np
 import xarray as xr
 
 from .funcs import load_month_dataset
-from .constants import regions, depth_range, depth_limit
+from .constants import regions, depth_range, depth_limit, SV
 from .calcs import calc_density, compute_along_isobath_velocity
 
 
@@ -27,15 +27,6 @@ def create_timeseries_2d(months, base_dir, var):
     -------
     xarray.DataArray
         Timeseries of spatial means with dimension ``time``.
-
-    Raises
-    ------
-    KeyError
-        If ``var`` is not found in a dataset.
-
-    Notes
-    -----
-    Assumes ``ds[var]`` has dimensions ``(YC, XC)`` or ``(time, YC, XC)``.
     """
     ts = []
     base_dir = Path(base_dir)
@@ -45,7 +36,7 @@ def create_timeseries_2d(months, base_dir, var):
         mask = ds["hFacC"][0] > 0
         field = ds[var].where(mask)
         mean_val = field.mean(dim=["XC", "YC"])
-        ts.append(mean_val.squeeze())
+        ts.append(mean_val)
 
     return xr.concat(ts, dim="time")
 
@@ -53,7 +44,7 @@ def create_timeseries_2d(months, base_dir, var):
 def create_timeseries_3d(months, base_dir, var = "THETA", region = "cont_shelf",
                          depth_range = depth_range):
     """
-    Compute a volume-weighted mean 3-D tracer timeseries.
+    Compute a volume-weighted mean 3-D timeseries.
 
     The volume mean is computed over a spatial subset set by the regions 
     and the depth limit defined in constants.py. The mean is weighted
@@ -78,16 +69,6 @@ def create_timeseries_3d(months, base_dir, var = "THETA", region = "cont_shelf",
     xarray.DataArray
         Volume-weighted tracer mean for each month.
 
-    Notes
-    -----
-    - Uses masking based on ``hFacC`` to remove land.
-    - Applies global ``depth_limit`` from constants.
-
-    Potential Issues
-    ----------------
-    - ``ds.Depth`` is nonstandard; typical MITgcm output uses ``Z``.  
-      If ``Depth`` is missing, this will error.
-    - ``hFacC`` is 3-D but you apply it on ``field["hFacC"]`` — correct.
     """
     base_dir = Path(base_dir)
 
@@ -104,9 +85,13 @@ def create_timeseries_3d(months, base_dir, var = "THETA", region = "cont_shelf",
 
         field = ds[var]
 
-        field = field.where(ds.Depth < depth_limit).sel(Z=slice(*depth_range), YC=slice(*lat_rng), XC=slice(*lon_rng))
-        dV = dV.where(ds.Depth < depth_limit).sel(Z=slice(*depth_range), YC=slice(*lat_rng), XC=slice(*lon_rng))
-
+        if region == "cont_shelf":
+            field = field.where(ds.Depth < depth_limit).sel(Z=slice(*depth_range), YC=slice(*lat_rng), XC=slice(*lon_rng))
+            dV = dV.where(ds.Depth < depth_limit).sel(Z=slice(*depth_range), YC=slice(*lat_rng), XC=slice(*lon_rng))
+        else: # if region in the cavities then compute the temperature over the entire water column
+            field = field.where(ds.Depth < depth_limit).sel(YC=slice(*lat_rng), XC=slice(*lon_rng))
+            dV = dV.where(ds.Depth < depth_limit).sel(YC=slice(*lat_rng), XC=slice(*lon_rng))
+        
         num = (field * dV).where(field["hFacC"] > 0).sum(dim=["Z", "YC", "XC"])
         den = dV.where(field["hFacC"] > 0).sum(dim=["Z", "YC", "XC"])
         ts.append(num / den)
@@ -136,16 +121,6 @@ def create_melt(months, base_dir, var = "melt", region = "cont_shelf"):
     -------
     xarray.DataArray
         Melt flux timeseries in gigatonnes per year.
-
-    Notes
-    -----
-    - Conversion uses 1e-12 factor to convert m³/s → Gt/yr.
-    - Negative SHIfwFlx corresponds to melting.
-
-    Possible Errors
-    ---------------
-    - Uses ``np.sum`` directly on DataArray; works, but
-      ``.sum(dim=...)`` is preferred.
     """
     base_dir = Path(base_dir)
     if var == "melt":
@@ -194,18 +169,6 @@ def create_timeseries_vel(months, base_dir, var=None, region=None):
     -------
     xarray.DataArray
         Undercurrent velocity timeseries.
-
-    Notes
-    -----
-    - Uses density threshold ``rho >= 1028``.
-    - Uses depth mask ``Z <= 800``.
-    - Geographic mask polygons are fixed based on prior work.
-
-    Possible Issues
-    ---------------
-    - ``ds.Depth`` is assumed to exist (not standard).
-    - In mask construction, ``lon = ds.XC - 360`` but coords are restored
-      as ``XC = lon + 360`` — works, but confusing.
     """
     base_dir = Path(base_dir)
     ts = []
@@ -243,4 +206,89 @@ def create_timeseries_vel(months, base_dir, var=None, region=None):
 
     return xr.concat(ts, dim="time")
 
+def create_timeseries_transport(months, base_dir, var=None, region=None):
+    """
+    Compute transport through PITT trough timeseries.
 
+    A density mask, depth mask, and hard-coded geographic mask define the
+    region of the undercurrent. The minimum zonal average velocity along
+    isobaths is extracted for each month.
+
+    Parameters
+    ----------
+    months : list of str
+        List of YYYYMM strings.
+    base_dir : str or Path
+        Directory containing MITgcm monthly outputs.
+    var : unused
+        Placeholder for compatibility; velocity is computed internally.
+    region : unused
+        Placeholder for future generalization.
+
+    Returns
+    -------
+    xarray.DataArray
+        Transport through trough timeseries.
+
+    Notes
+    -----
+    - Geographic mask polygons are fixed based on prior work.
+    """
+    base_dir = Path(base_dir)
+    ts = []
+
+    for m in months:
+        ds = load_month_dataset(base_dir, m)
+
+        vel = ds.VVEL.sel(XC=slice(251, 254.5))[:,:,99,:]
+        vel = vel.where(vel.hFacS != 0)
+        vel = vel.where(vel <= 0)
+        transport = SV * np.sum(-vel * vel.dxG * vel.drF, axis=(-2, -1))
+        ts.append(transport)
+
+    return xr.concat(ts, dim="time")
+
+
+def create_timeseries_fw(months, base_dir, var=None, region=None):
+    """
+    Compute freshwater fluxtimeseries.
+
+    A density mask, depth mask, and hard-coded geographic mask define the
+    region of the undercurrent. The minimum zonal average velocity along
+    isobaths is extracted for each month.
+
+    Parameters
+    ----------
+    months : list of str
+        List of YYYYMM strings.
+    base_dir : str or Path
+        Directory containing MITgcm monthly outputs.
+    var : unused
+        Placeholder for compatibility; velocity is computed internally.
+    region : unused
+        Placeholder for future generalization.
+
+    Returns
+    -------
+    xarray.DataArray
+        Transport through trough timeseries.
+
+    """
+    base_dir = Path(base_dir)
+    ts = []
+
+    if var == "si_freezing":
+        var_name = "SIfwfrz"
+    elif var == "si_melting":
+        var_name = "SIfwmelt"
+    elif var == "fw_total":
+        var_name = "oceFWflx"
+
+    for m in months:
+        ds = load_month_dataset(base_dir, m)
+
+        data = ds[var_name]
+        fwFlx = np.sum(data, axis=(-2, -1)) / 1000 # convert to m s-1
+        ts.append(fwFlx)
+
+    return xr.concat(ts, dim="time")
