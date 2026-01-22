@@ -22,16 +22,6 @@ def get_available_months(base_dir):
     list of str
         Sorted list of valid YYYYMM directory names that include a MITgcm output
         dataset.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the expected ``output/`` directory does not exist.
-
-    Examples
-    --------
-    >>> get_available_months("/sim/AMUND_LENS001_O")
-    ['199201', '199202', '199203']
     """
     base_dir = Path(base_dir)
     output_root = base_dir / "output"
@@ -80,7 +70,7 @@ def parse_args():
     parser.add_argument("scenario", help="Scenario (LENS, month, 1year, 5year)")
     parser.add_argument("ens_member", help="Ensemble member (1–9)")
     parser.add_argument(
-        "variable", choices=["temperature", "salt", "etan", "melt", "undercurrent"], help="Variable to process"
+        "variable", choices=["temperature", "salt", "etan", "melt", "undercurrent", "transport","si_freezing", "si_melting", "fw_total"], help="Variable to process"
     )
     return parser.parse_args()
 
