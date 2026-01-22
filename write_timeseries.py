@@ -1,6 +1,5 @@
 import os
 import sys
-import logging
 from pathlib import Path
 import xarray as xr
 from tools.funcs import (
@@ -12,6 +11,8 @@ from tools.timeseries_funcs import (
     create_timeseries_2d,
     create_timeseries_vel,
     create_melt,
+    create_timeseries_transport,
+    create_timeseries_fw,
 )
 from tools.directories_and_paths import OUTPUT_PATH, get_filepath
 from tools.constants import regions
@@ -52,6 +53,10 @@ def create_and_save_timeseries(
         "melt": create_melt,
         "etan": create_timeseries_2d,
         "undercurrent": create_timeseries_vel,
+        "transport": create_timeseries_transport,
+        "si_freezing": create_timeseries_fw,
+        "si_melting": create_timeseries_fw,
+        "fw_total": create_timeseries_fw,
     }
 
     attr_map = {
@@ -84,6 +89,27 @@ def create_and_save_timeseries(
             long_name="Max along slope speed for the undercurrent areas",
             units="m s-1",
             name="speed",
+        ),
+        "transport": dict(
+            standard_name="ocean_volume_y_transport",
+            long_name="Southward transport across section",
+            units="m3 s-1",
+            name="southward_transport",
+        ),
+        "si_melting": dict(
+            long_name="Freshwater Flux from sea ice melting",
+            units="m s-1",
+            name="si_melting",
+        ),
+         "si_freezing": dict(
+            long_name="Freshwater Flux from sea ice freezing",
+            units="m s-1",
+            name="si_freezing",
+        ),
+         "fw_total": dict(
+            long_name="Total Freshwater Flux at the Surface",
+            units="m s-1",
+            name="fw_total",
         ),
     }
 
@@ -142,7 +168,7 @@ def main():
         old_ds = xr.open_dataset(output_file)
         last_timestamp = str(old_ds.time.dt.strftime("%Y%m").values[-1])
         print(f"Last timestamp at {last_timestamp}")
-        new_months = [m for m in sorted_months if m > last_timestamp]
+        new_months = [m for m in sorted_months if m >= last_timestamp]
 
         if not new_months:
             print("No new years to process. Timeseries is up-to-date.")
