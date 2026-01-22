@@ -79,6 +79,7 @@ def create_timeseries_3d(months, base_dir, var = "THETA", region = "cont_shelf",
     ts = []
 
     for m in months:
+        print(m)
         ds = load_month_dataset(base_dir, m)
 
         dV = ds["rA"] * ds["drF"] * ds["hFacC"]
