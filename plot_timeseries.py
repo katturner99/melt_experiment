@@ -1,6 +1,5 @@
 import datetime as dt
 from pathlib import Path
-from typing import Optional, Tuple, List
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,191 +9,267 @@ from tools.directories_and_paths import OUTPUT_PATH
 from tools.calcs import moving_average
 
 
-# ----------------------------------------------------------------------------- #
-#                                 CONFIGURATION                                 #
-# ----------------------------------------------------------------------------- #
-
 SCENARIO_COLORS = {
-    "LENS": "palevioletred",
+    "LENS": "magenta",
+    "MELT": "forestgreen",
     "MELT_noS": "deepskyblue",
-    "MELT": "darkorange",
     "MELT_old": "orange",
 }
 
-LINE_STYLES = ['-.', '--', ':']
 
+def variable_title(var, region_var):
+    """Return a human-readable plot title."""
+    titles = {
+        "temperature": f"Potential Temperature (degC) ({region_var})",
+        "salt": f"Salinity ({region_var})",
+        "undercurrent": "Undercurrent Speed (m/s)",
+        "transport": "Transport through trough at 73S (Sv)"
+    }
+    return titles.get(var, region_var)
 
-# ----------------------------------------------------------------------------- #
-#                             DATA LOADING UTILITIES                             #
-# ----------------------------------------------------------------------------- #
 
 def load_timeseries(
-    filepath: Path,
-    var_name: str,
-    start: dt.datetime,
-    end: dt.datetime,
-    cutoff_year: int = 2005
-) -> Optional[Tuple[np.ndarray, np.ndarray, int]]:
-    """
-    Load a timeseries variable from a NetCDF file and crop to the requested range.
-
-    Parameters
-    ----------
-    filepath : Path
-        Path to the NetCDF file.
-    var_name : str
-        The dataset variable to load.
-    start, end : datetime
-        Date range for cropping.
-    cutoff_year : int
-        Year at which to split the plotted line.
-
-    Returns
-    -------
-    time : np.ndarray of datetime64
-    values : np.ndarray
-    index_cutoff : int (index in time array)
-    
-    Returns None if the file is missing or invalid.
-    """
-
+    filepath,
+    var_name,
+    start,
+    end,
+):
+    """Load and time-crop a NetCDF timeseries."""
     if not filepath.exists():
-        print(f"⚠️ File not found: {filepath}")
-        return None, None, None
+        print(f"⚠️ Missing file: {filepath}")
+        return None
 
-    ds = xr.open_dataset(filepath)
+    with xr.open_dataset(filepath) as ds:
+        time = [dt.datetime(t.year, t.month, t.day) for t in ds.time.values]
+        values = ds[var_name].values
 
-    # Convert cftime to Python datetime
-    time = [dt.datetime(t.year, t.month, t.day) for t in ds.time.values]
+    
+    mask = [(start <= t < end) for t in time]
+    time = [t for t, keep in zip(time, mask) if keep]
+    values = values[mask]
 
-    # Crop to date range
-    mask = [(start <= t <= end) for t in time]
-    time_cropped = [t for t, keep in zip(time, mask) if keep]
     if var_name == "speed":
-        values_cropped = -ds[var_name].values[mask]
-    else:
-        values_cropped =  ds[var_name].values[mask]
+        values = -values
 
-    # Find index of first timestamp in year 2005 (in cropped array)
-    index_2005 = next((i for i, t in enumerate(time_cropped) if t.year == 2005), None)
-
-    return time_cropped, values_cropped, index_2005
+    return time, values
 
 
-# ----------------------------------------------------------------------------- #
-#                                PLOTTING LOGIC                                 #
-# ----------------------------------------------------------------------------- #
+def save_figure(fig, filename):
+    fig.savefig(filename, dpi=300, bbox_inches="tight")
+    print(f"✅ Saved figure: {filename}")
+
 
 def plot_comparison(
-    scenarios: List[str],
-    ens_members: List[int],
-    var: str,
-    region_var: str,
-    start_year: int = 1995,
-    end_year: int = 2020,
-    cutoff_year: int = 2005,
-    window: int = 24,
-) -> None:
-    """
-    Plot the ensemble comparison across scenarios.
+    scenarios,
+    ens_members,
+    var,
+    region_var,
+    start_year,
+    end_year,
+    window=24,
+):
 
-    The first portion of each curve (before cutoff_year) is plotted in gray,
-    while the remainder uses the scenario color.
-    """
-
-    start_date = dt.datetime(start_year, 1, 1)
-    end_date = dt.datetime(end_year, 1, 1)
-
+    start, end = dt.datetime(start_year, 2, 1), dt.datetime(end_year, 1, 1)
     fig, ax = plt.subplots(figsize=(10, 6))
 
     for scenario in scenarios:
+        all_values = []
+        time_ref = None
+
         for member in ens_members:
-
-            # Build file path
-            filename = f"{scenario}00{member}_{var}_timeseries.nc"
-            filepath = Path(OUTPUT_PATH) / filename
-
-            ts = load_timeseries(filepath, region_var, start_date, end_date, cutoff_year)
-
+            filepath = Path(OUTPUT_PATH) / f"{scenario}00{member}_{var}_timeseries.nc"
+            ts = load_timeseries(filepath, region_var, start, end)
             if ts is None:
                 continue
 
-            time, values, idx_cut = ts
+            time, values = ts
 
-            # Smooth if enough data
-            smoothed = moving_average(values, window) if len(values) >= window else values
-            #smoothed = values
-            linestyle = LINE_STYLES[(member - 1) % len(LINE_STYLES)]
 
-            # Pre-cutoff segment (gray)
-            ax.plot(
-                time[:idx_cut],
-                smoothed[:idx_cut],
-                color="gray",
-                linewidth=2,
-                linestyle=linestyle,
-                alpha=0.5,
-            )
+            values = moving_average(values, window)
 
-            # Post-cutoff segment (scenario color)
-            ax.plot(
-                time[idx_cut:],
-                smoothed[idx_cut:],
-                color=SCENARIO_COLORS.get(scenario, "gray"),
-                linewidth=2,
-                linestyle=linestyle,
-                alpha=0.9,
-            )
+            if time_ref is None:
+                time_ref = time
+            else:
+                # safety check: skip members with mismatched time axis
+                if len(values) != len(time_ref):
+                    print("mangos!")
+                    # after: time, values = ts
 
-    if var == "temperature":
-        title = f"Potential Temperature between 200 and 700m ($^\circ$C) ({region_var})"
-    elif var == "salt":
-        title = f"Salinity between 200 and 700m (psu) ({region_var}))"
-    elif var == "undercurrent":
-        title = "Undercurrent Speed"
-    else:
-        title = region_var
-    # Labels / formatting
+                    # --- check for missing years ---
+                    years_present = np.unique([t.year for t in time])
+                    expected_years = np.arange(start_year, end_year + 1)
+
+                    missing_years = np.setdiff1d(expected_years, years_present)
+
+                    if len(missing_years) > 0:
+                        print(
+                            f"Missing years for scenario={scenario}, member={member}: "
+                            f"{missing_years.tolist()}"
+                        )
+                    # --- end check ---
+
+                    continue
+
+            all_values.append(values)
+
+        if len(all_values) == 0:
+            continue
+
+        ens = np.vstack(all_values)  # shape: (n_member, n_time)
+
+        ens_min = np.nanmin(ens, axis=0)
+        ens_max = np.nanmax(ens, axis=0)
+        ens_mean = np.nanmean(ens, axis=0)
+
+        color = SCENARIO_COLORS.get(scenario, "gray")
+
+        # shaded envelope
+        ax.fill_between(
+            time_ref,
+            ens_min,
+            ens_max,
+            color=color,
+            alpha=0.25,
+            linewidth=0,
+        )
+
+        # bold ensemble mean
+        ax.plot(
+            time_ref,
+            ens_mean,
+            color=color,
+            linewidth=3,
+            label=scenario,
+        )
+
     ax.set(
+        title=variable_title(var, region_var),
         xlabel="Time",
         ylabel=var,
-        title=title,
     )
-
     ax.grid(True, linestyle="--", alpha=0.2)
 
-    # Legend: only show scenario colors, not each member
-    handles = [
-        plt.Line2D([0], [0], color=SCENARIO_COLORS[s], lw=3, label=s)
-        for s in scenarios
-    ]
-    ax.legend(handles=handles, title="Scenario")
-
+    ax.legend(title="Scenario")
     plt.tight_layout()
+    save_figure(fig, f"{region_var}_timeseries.png")
 
-    output_file = Path(f"{region_var}_timeseries.png")
-    plt.savefig(output_file, dpi=300, bbox_inches="tight")
-    print(f"✅ Saved figure: {output_file}")
 
-    #plt.show()
+
+def plot_difference(
+    scenarios,
+    ens_members,
+    var,
+    region_var,
+    start_year,
+    end_year,
+    window=48,
+):
+
+    start, end = dt.datetime(start_year, 1, 1), dt.datetime(end_year, 1, 1)
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # only plot differences relative to LENS
+    diff_scenarios = [s for s in scenarios if s != "LENS"]
+
+    for scenario in diff_scenarios:
+        all_diffs = []
+        time_ref = None
+
+        for member in ens_members:
+            fp_scn = Path(OUTPUT_PATH) / f"{scenario}00{member}_{var}_timeseries.nc"
+            fp_ref = Path(OUTPUT_PATH) / f"LENS00{member}_{var}_timeseries.nc"
+
+            ts_scn = load_timeseries(fp_scn, region_var, start, end)
+            ts_ref = load_timeseries(fp_ref, region_var, start, end)
+            if ts_scn is None or ts_ref is None:
+                continue
+
+            time, scn = ts_scn
+            _, ref = ts_ref
+
+            n = min(len(scn), len(ref))
+            print(n)
+            
+            diff = scn[:n] - ref[:n] 
+            diff = moving_average(diff, window)
+
+            if time_ref is None:
+                time_ref = time[:n]
+            else:
+                if len(diff) != len(time_ref):
+                    continue
+
+            all_diffs.append(diff)
+
+        if len(all_diffs) == 0:
+            continue
+
+        ens = np.vstack(all_diffs)
+
+        ens_min = np.nanmin(ens, axis=0)
+        ens_max = np.nanmax(ens, axis=0)
+        ens_mean = np.nanmean(ens, axis=0)
+
+        color = SCENARIO_COLORS.get(scenario, "gray")
+
+        # shaded min–max envelope
+        ax.fill_between(
+            time_ref,
+            ens_min,
+            ens_max,
+            color=color,
+            alpha=0.25,
+            linewidth=0,
+        )
+
+        # bold ensemble mean
+        ax.plot(
+            time_ref,
+            ens_mean,
+            color=color,
+            linewidth=3,
+            label=scenario,
+        )
+
+    ax.set(
+        title=f"Difference MELT - LENS ({region_var})",
+        xlabel="Time",
+        ylabel=var,
+    )
+    ax.grid(True, linestyle="--", alpha=0.2)
+
+    ax.legend(title="Scenario")
+    plt.tight_layout()
+    save_figure(fig, f"{region_var}_timeseries_difference.png")
+
 
 
 # ----------------------------------------------------------------------------- #
-#                                     MAIN                                      #
+#                                    MAIN                                       #
 # ----------------------------------------------------------------------------- #
 
 def main() -> None:
     scenarios = ["LENS", "MELT", "MELT_noS"]
-    ens_members = [3]
-    var = "temperature"
-    region_var = "theta_cont_shelf"
+    ens_members = [2, 3, 4, 5, 6]
 
+    var = "temperature"
+    var_region = "theta_pig"
+    
     plot_comparison(
         scenarios=scenarios,
         ens_members=ens_members,
         var=var,
-        region_var=region_var,
-        start_year=1990,
+        region_var=var_region,
+        start_year=2006,
+        end_year=2100,
+    )
+
+    plot_difference(
+        scenarios=scenarios,
+        ens_members=ens_members,
+        var=var,
+        region_var=var_region,
+        start_year=2006,
         end_year=2100,
     )
 
