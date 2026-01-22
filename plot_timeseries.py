@@ -1,6 +1,6 @@
 import datetime as dt
 from pathlib import Path
-
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
@@ -247,32 +247,58 @@ def plot_difference(
 # ----------------------------------------------------------------------------- #
 #                                    MAIN                                       #
 # ----------------------------------------------------------------------------- #
-
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Plot ensemble timeseries and differences from MITgcm output."
+    )
+
+    parser.add_argument(
+        "--var",
+        type=str,
+        required=True,
+        help="Variable name used in filenames (e.g. temperature, salt, undercurrent)",
+    )
+
+    parser.add_argument(
+        "--region-var",
+        type=str,
+        required=True,
+        help="Variable name inside NetCDF file (e.g. theta_pig)",
+    )
+
+    parser.add_argument(
+        "--start-year",
+        type=int,
+        default=2006,
+        help="Start year for plotting (default: 2006)",
+    )
+
+    parser.add_argument(
+        "--end-year",
+        type=int,
+        default=2100,
+        help="End year for plotting (default: 2100)",
+    )
+
+    args = parser.parse_args()
+
     scenarios = ["LENS", "MELT", "MELT_noS"]
     ens_members = [2, 3, 4, 5, 6]
 
-    var = "temperature"
-    var_region = "theta_pig"
-    
     plot_comparison(
         scenarios=scenarios,
         ens_members=ens_members,
-        var=var,
-        region_var=var_region,
-        start_year=2006,
-        end_year=2100,
+        var=args.var,
+        region_var=args.region_var,
+        start_year=args.start_year,
+        end_year=args.end_year,
     )
 
     plot_difference(
         scenarios=scenarios,
         ens_members=ens_members,
-        var=var,
-        region_var=var_region,
-        start_year=2006,
-        end_year=2100,
+        var=args.var,
+        region_var=args.region_var,
+        start_year=args.start_year,
+        end_year=args.end_year,
     )
-
-
-if __name__ == "__main__":
-    main()
