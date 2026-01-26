@@ -70,8 +70,7 @@ def parse_args():
     parser.add_argument("scenario", help="Scenario (LENS, month, 1year, 5year)")
     parser.add_argument("ens_member", help="Ensemble member (1–9)")
     parser.add_argument(
-        "variable", choices=["temperature", "salt", "etan", "melt", "undercurrent", "transport","si_freezing", "si_melting", "fw_total"], help="Variable to process"
-    )
+        "variable")
     return parser.parse_args()
 
 

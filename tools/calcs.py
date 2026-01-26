@@ -1,6 +1,6 @@
 import numpy as np
 import xarray as xr
-from .constants import ATM_PRESS, RHO_REF, G
+from .constants import ATM_PRESS, RHO_REF, G, R_EARTH
 from mitgcm_python.diagnostics import density
 
 def moving_average(a, n=3):
@@ -114,3 +114,39 @@ def compute_along_isobath_velocity(ds):
     print(U_c, V_c, V_along_slope)
 
     return V_along_slope
+
+def haversine(lats: np.ndarray, lons: np.ndarray, 
+              lat_iso: float, lon_iso: float) -> np.ndarray:
+    """
+    Calculate great circle distance using the Haversine formula.
+    Original source: https://www.geeksforgeeks.org/dsa/haversine-formula-to-find-distance-between-two-points-on-a-sphere/
+    
+    Parameters
+    ----------
+    lats : np.ndarray
+        Latitudes of points (degrees)
+    lons : np.ndarray
+        Longitudes of points (degrees)
+    lat_iso : float
+        Latitude of reference point (degrees)
+    lon_iso : float
+        Longitude of reference point (degrees)
+        
+    Returns
+    -------
+    np.ndarray
+        Distance in kilometers
+    """
+    # Convert to radians
+    lats = np.deg2rad(lats)       
+    lons = np.deg2rad(lons)
+    lat_iso = np.deg2rad(lat_iso)
+    lon_iso = np.deg2rad(lon_iso)
+    
+    # Calculate differences
+    dlat = lat_iso - lats
+    dlon = lon_iso - lons
+    
+    # Haversine formula
+    a = np.sin(dlat/2)**2 + np.cos(lats)*np.cos(lat_iso)*np.sin(dlon/2)**2
+    return 2 * R_EARTH * np.arcsin(np.sqrt(a))

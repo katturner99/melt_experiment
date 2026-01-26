@@ -7,9 +7,13 @@ regions = {
     "getz":  ([-75, -73], [224, 245.2]),
 }
 
+transport_lat, transport_lon = -73, [251, 254.5]
+
 ATM_PRESS = 101325      # Atmospheric pressure in Pascals
-RHO_REF = 1025   # Density of seawater in kg/m³
-G = 9.81 
+RHO_REF = 1025          # Density of seawater in kg/m³
+G = 9.81                # Gravity
+SV = 1e-6               # Sverdrups
+R_EARTH = 6371.0        # Earth's radius
 
 depth_range = (-200,-700)
 depth_limit = 1500
